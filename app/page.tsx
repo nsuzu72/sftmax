@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { initModels } from '@/lib/faceAnalyzer';
-import { evaluateFacialMetrics, SoftmaxRecommendation } from '@/lib/softmaxRules';
+import { initModels } from '@/lib/faceAnalyzer.ts';
+import { evaluateFacialMetrics, SoftmaxRecommendation } from '@/lib/softmaxRules.ts';
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
