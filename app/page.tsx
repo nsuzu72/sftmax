@@ -1,12 +1,26 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { initModels, estimateDemographicFromCanvas } from '@/app/lib/faceAnalyzer';
+import { initModels } from '@/app/lib/faceAnalyzer';
 import { evaluateFacialMetrics, SoftmaxRecommendation } from '@/app/lib/softmaxRules';
+
+const ETHNICITIES = [
+  'Northern European',
+  'Southern European',
+  'East Asian',
+  'Southeast Asian',
+  'South Asian',
+  'Middle Eastern / North African',
+  'Sub-Saharan African',
+  'Latino / Hispanic',
+  'Indigenous American',
+  'Pacific Islander'
+];
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
-  const [ethnicity, setEthnicity] = useState<string>('');
+  const [primaryEthnicity, setPrimaryEthnicity] = useState<string>('');
+  const [secondaryEthnicity, setSecondaryEthnicity] = useState<string>('');
   const [results, setResults] = useState<SoftmaxRecommendation[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -27,18 +41,11 @@ export default function Home() {
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(img, 0, 0);
 
-    // Initialize local MediaPipe vision model
     const { faceLandmarker } = await initModels();
-
-    // 1. Detect 3D Face Mesh
     const landmarkResult = faceLandmarker.detect(img);
 
     if (landmarkResult.faceLandmarks.length > 0) {
       const landmarks = landmarkResult.faceLandmarks[0];
-
-      // 2. Estimate demographic/luminance profile from canvas directly
-      const detectedEthnicity = estimateDemographicFromCanvas(ctx, landmarks, canvas.width, canvas.height);
-      setEthnicity(detectedEthnicity);
 
       // Draw Landmark Overlay
       ctx.fillStyle = '#00FF00';
@@ -48,8 +55,9 @@ export default function Home() {
         ctx.fill();
       });
 
-      // 3. Evaluate Metrics & Map Softmaxxes
-      const recommendations = evaluateFacialMetrics(landmarks, detectedEthnicity);
+      // Pass user-selected ethnicities
+      const selectedEthnicities = [primaryEthnicity, secondaryEthnicity].filter(Boolean);
+      const recommendations = evaluateFacialMetrics(landmarks, selectedEthnicities);
       setResults(recommendations);
     } else {
       alert('No facial landmarks detected. Try a clear front-facing photo.');
@@ -60,26 +68,54 @@ export default function Home() {
 
   return (
     <main className="p-8 max-w-4xl mx-auto font-sans">
-      <h1 className="text-3xl font-bold mb-4">Facial Feature Analysis & Softmax Planner</h1>
-      
+      <h1 className="text-3xl font-bold mb-2">Facial Feature Analysis & Softmax Planner</h1>
+      <p className="text-gray-600 mb-6 text-sm">
+        For best results, take photos 3–6 feet away (use optical zoom) in clear front lighting[cite: 1].
+      </p>
+
+      {/* Ethnicity Dropdown Selectors */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded border">
+        <div>
+          <label className="block text-sm font-semibold mb-1">Primary Ethnicity (Optional):</label>
+          <select 
+            value={primaryEthnicity} 
+            onChange={(e) => setPrimaryEthnicity(e.target.value)}
+            className="w-full border p-2 rounded bg-white"
+          >
+            <option value="">Select Primary...</option>
+            {ETHNICITIES.map((eth) => (
+              <option key={eth} value={eth}>{eth}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-semibold mb-1">Secondary Ethnicity (Optional):</label>
+          <select 
+            value={secondaryEthnicity} 
+            onChange={(e) => setSecondaryEthnicity(e.target.value)}
+            className="w-full border p-2 rounded bg-white"
+          >
+            <option value="">Select Secondary...</option>
+            {ETHNICITIES.map((eth) => (
+              <option key={eth} value={eth}>{eth}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <input 
         type="file" 
         accept="image/*" 
         onChange={handleImageUpload} 
-        className="mb-6 block border p-2 rounded"
+        className="mb-6 block border p-2 rounded w-full"
       />
 
-      {loading && <p className="text-blue-600 font-semibold">Processing image locally in browser...</p>}
+      {loading && <p className="text-blue-600 font-semibold mb-4">Analyzing facial geometry...</p>}
 
       <div className="relative mb-6">
         <canvas ref={canvasRef} className="max-w-full border rounded shadow" />
       </div>
-
-      {ethnicity && (
-        <div className="bg-gray-100 p-4 rounded mb-6">
-          <h2 className="text-xl font-bold">Complexion / Profile: <span className="text-indigo-600">{ethnicity}</span></h2>
-        </div>
-      )}
 
       {results.length > 0 && (
         <div className="space-y-4">
