@@ -5,26 +5,27 @@ export interface SoftmaxRecommendation {
   recommendedRoutines: string[];
 }
 
-export function evaluateFacialMetrics(landmarks: any[], ethnicity: string): SoftmaxRecommendation[] {
+export function evaluateFacialMetrics(
+  landmarks: any[], 
+  ethnicities: string[]
+): SoftmaxRecommendation[] {
   const recommendations: SoftmaxRecommendation[] = [];
 
-  // Helper: 3D Euclidean Distance
   const getDistance = (p1: any, p2: any) =>
     Math.hypot(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z);
 
   // 1. CANTHAL TILT / EYE ANGLE
-  // Landmark 33: Outer left eye, Landmark 133: Inner left eye
   const leftOuter = landmarks[33];
   const leftInner = landmarks[133];
   const canthalAngle = Math.atan2(leftOuter.y - leftInner.y, leftOuter.x - leftInner.x) * (180 / Math.PI);
 
-  if (canthalAngle > 2.0) { // Neutral/Negative slope
+  if (canthalAngle > 1.5) {
     recommendations.push({
       feature: "Eye Orientation / Orbital Rim",
       targetArea: "Upper lid & Infraorbital Area",
-      measuredMetric: `Canthal angle: ${canthalAngle.toFixed(1)}° (Negative/Neutral)`,
+      measuredMetric: `Canthal angle: ${canthalAngle.toFixed(1)}° (Neutral/Negative)`,
       recommendedRoutines: [
-        "Upward Fascia Pull: Press fingers at orbital rim, pull tissue upward toward hairline for 20-30s[cite: 1].",
+        "Upward Fascia Pull: Press fingers at orbital rim, pull tissue upward toward hairline for 20-30s.",
         "Topicals/Nutrients: Apply Hyaluronic Acid serum and consume Copper peptide / Silica + Glycine[cite: 1].",
         "Eye Exercises & Light Tapping[cite: 1]."
       ]
@@ -32,9 +33,8 @@ export function evaluateFacialMetrics(landmarks: any[], ethnicity: string): Soft
   }
 
   // 2. CHEEKBONE / ZYGOMA PROJECTION
-  // Landmarks 234 & 454 (Zygomatic Arches) vs Landmark 1 (Nose Tip)
   const zygomaWidth = getDistance(landmarks[234], landmarks[454]);
-  const faceLength = getDistance(landmarks[10], landmarks[152]); // Top of forehead to chin
+  const faceLength = getDistance(landmarks[10], landmarks[152]);
   const zygomaRatio = zygomaWidth / faceLength;
 
   if (zygomaRatio < 0.85) {
@@ -51,7 +51,6 @@ export function evaluateFacialMetrics(landmarks: any[], ethnicity: string): Soft
   }
 
   // 3. JAWLINE & GONIAL ANGLE
-  // Landmarks 172 & 397 (Jaw angle/Gonion points)
   const jawWidth = getDistance(landmarks[172], landmarks[397]);
   if (jawWidth / zygomaWidth < 0.75) {
     recommendations.push({
@@ -66,17 +65,24 @@ export function evaluateFacialMetrics(landmarks: any[], ethnicity: string): Soft
     });
   }
 
-  // 4. MAXILLA & PALATE SEATING (Universal Core Routine)
-  recommendations.push({
-    feature: "Maxillary Posture & Airway",
-    targetArea: "Maxilla",
-    measuredMetric: `Demographic Profile: ${ethnicity}`,
-    recommendedRoutines: [
-      "24/7 Mewing: Constant tongue pressure against the palate to promote forward and upward growth[cite: 1].",
-      "CCW Rotation Practice: Chin tucks (hold 30s, 5 reps, 3 sets daily)[cite: 1].",
-      "Nightly Nasal Breathing: Mouth taping during sleep to optimize GH surges[cite: 1]."
-    ]
-  });
+  // 4. MAXILLARY POSTURE (Now Conditional on Midface Ratio)
+  // Distance from nasal root (Landmark 168) to upper lip (Landmark 0) vs total length
+  const midfaceLength = getDistance(landmarks[168], landmarks[0]);
+  const midfaceRatio = midfaceLength / faceLength;
+
+  if (midfaceRatio > 0.35) { // Indicates elongated or recessed midface
+    const ethnicityLabel = ethnicities.length > 0 ? ethnicities.join(' / ') : 'General';
+    recommendations.push({
+      feature: "Maxillary Posture & Airway",
+      targetArea: "Maxilla & Palate",
+      measuredMetric: `Midface Ratio: ${midfaceRatio.toFixed(2)} (Background: ${ethnicityLabel})`,
+      recommendedRoutines: [
+        "24/7 Mewing: Constant tongue pressure against the palate to promote forward and upward growth[cite: 1].",
+        "CCW Rotation Practice: Chin tucks (hold 30s, 5 reps, 3 sets daily)[cite: 1].",
+        "Nightly Nasal Breathing: Mouth taping during sleep to optimize GH surges[cite: 1]."
+      ]
+    });
+  }
 
   return recommendations;
 }
