@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { initModels } from '@/app/lib/faceAnalyzer';
-import { evaluateFacialMetrics, SoftmaxRecommendation } from '@/app/lib/softmaxRules';
+import { initModels } from '@/lib/faceAnalyzer';
+import { evaluateFacialMetrics, AnalysisResult } from '@/lib/softmaxRules';
 
 const ETHNICITIES = [
   'Northern European',
@@ -21,7 +21,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [primaryEthnicity, setPrimaryEthnicity] = useState<string>('');
   const [secondaryEthnicity, setSecondaryEthnicity] = useState<string>('');
-  const [results, setResults] = useState<SoftmaxRecommendation[]>([]);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string>('');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -30,7 +30,7 @@ export default function Home() {
     if (!file) return;
 
     setLoading(true);
-    setResults([]);
+    setAnalysis(null);
     setError('');
 
     const img = new Image();
@@ -50,18 +50,18 @@ export default function Home() {
       if (landmarkResult.faceLandmarks.length > 0) {
         const landmarks = landmarkResult.faceLandmarks[0];
 
-        // Draw Landmark Overlay - Neon Cyan for Scientific Vibe
-        ctx.fillStyle = '#22d3ee'; // cyan-400
+        // Draw Landmark Overlay - Neon Cyan
+        ctx.fillStyle = '#22d3ee';
         landmarks.forEach((pt: any) => {
           ctx.beginPath();
           ctx.arc(pt.x * canvas.width, pt.y * canvas.height, 2, 0, 2 * Math.PI);
           ctx.fill();
         });
 
-        // Pass user-selected ethnicities
+        // Pass user-selected ethnicities + canvas context for Debloat Analysis
         const selectedEthnicities = [primaryEthnicity, secondaryEthnicity].filter(Boolean);
-        const recommendations = evaluateFacialMetrics(landmarks, selectedEthnicities);
-        setResults(recommendations);
+        const result = evaluateFacialMetrics(landmarks, selectedEthnicities, ctx, canvas.width, canvas.height);
+        setAnalysis(result);
       } else {
         setError('NO FACIAL LANDMARKS DETECTED. TRY A CLEAR FRONT-FACING PHOTO.');
       }
@@ -74,7 +74,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-black text-zinc-300 font-mono p-4 md:p-8 relative overflow-hidden">
-      {/* Background Grid Effect */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_60%,transparent_100%)] opacity-40 pointer-events-none"></div>
 
       <div className="max-w-5xl mx-auto relative z-10 space-y-8">
@@ -86,10 +85,10 @@ export default function Home() {
             SYSTEM ONLINE // BIOMETRIC ANALYSIS ENABLED
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-zinc-100 tracking-tight">
-            FACIAL GEOMETRY MATRIX <span className="text-zinc-600 font-normal text-2xl">v1.0</span>
+            FACIAL GEOMETRY MATRIX <span className="text-zinc-600 font-normal text-2xl">v2.0</span>
           </h1>
           <p className="text-zinc-500 mt-2 text-sm max-w-2xl">
-            For optimal precision, capture images 3–6 feet away using optical zoom in clear, front-facing lighting conditions.
+            For optimal precision, capture images 3–6 feet away using optical zoom in clear, front-facing lighting conditions[cite: 1].
           </p>
         </header>
 
@@ -153,7 +152,6 @@ export default function Home() {
 
         {/* Viewport / Canvas */}
         <section className="relative border border-zinc-800 bg-black p-4 rounded-sm min-h-[400px] flex items-center justify-center">
-          {/* Targeting Reticle Corners */}
           <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-cyan-500/50"></div>
           <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-cyan-500/50"></div>
           <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-cyan-500/50"></div>
@@ -161,55 +159,115 @@ export default function Home() {
           
           <canvas ref={canvasRef} className="max-w-full h-auto object-contain" />
           
-          {!loading && results.length === 0 && !error && (
+          {!loading && !analysis && !error && (
             <div className="absolute text-zinc-700 text-xs tracking-widest pointer-events-none">
               AWAITING DATA INPUT
             </div>
           )}
         </section>
 
-        {/* Results Section */}
-        {results.length > 0 && (
+        {/* Debloat Meter Module */}
+        {analysis && (
+          <section className="border border-zinc-800 bg-zinc-950/60 p-6 rounded-sm space-y-4">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
+              <h2 className="text-lg font-bold text-zinc-100 uppercase tracking-widest flex items-center gap-2">
+                <span className="text-cyan-400">⚡</span> Debloat Meter Index
+              </h2>
+              <span className={`text-xs font-bold tracking-wider px-2.5 py-1 rounded-sm border ${
+                analysis.debloatScore > 50 
+                  ? 'bg-red-950/50 text-red-400 border-red-800' 
+                  : 'bg-cyan-950/50 text-cyan-400 border-cyan-800'
+              }`}>
+                {analysis.debloatStatus}
+              </span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-zinc-400">
+                <span>FLUID RETENTION SCORE:</span>
+                <span className="font-bold text-zinc-200">{analysis.debloatScore}%</span>
+              </div>
+              <div className="w-full bg-zinc-900 border border-zinc-800 h-4 rounded-sm overflow-hidden p-0.5">
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    analysis.debloatScore > 65 ? 'bg-red-500' : analysis.debloatScore > 40 ? 'bg-amber-500' : 'bg-cyan-400'
+                  }`}
+                  style={{ width: `${analysis.debloatScore}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Debloat Protocol Suggestions */}
+            {analysis.debloatScore > 30 && (
+              <div className="mt-4 pt-3 border-t border-zinc-900">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Recommended Debloating Actions:</p>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-zinc-300">
+                  {analysis.debloatRoutines.map((routine, idx) => (
+                    <li key={idx} className="bg-black/40 p-2.5 border-l-2 border-cyan-500 flex items-start gap-2">
+                      <span className="text-cyan-400">›</span>
+                      <span>{routine}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Diagnostic Results Section */}
+        {analysis && (
           <section className="space-y-6">
             <h2 className="text-xl font-bold text-zinc-100 border-l-4 border-cyan-500 pl-3 uppercase tracking-widest">
-              Diagnostic Output
+              Biometric Diagnostic Output
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {results.map((res, idx) => (
-                <div key={idx} className="border border-zinc-800 bg-zinc-950/50 p-5 rounded-sm hover:border-zinc-700 transition-colors">
-                  <div className="flex justify-between items-start mb-3 pb-3 border-b border-zinc-800">
-                    <h3 className="text-lg font-bold text-cyan-400 uppercase tracking-wide">
-                      {res.feature}
-                    </h3>
-                    <span className="text-xs text-zinc-600 font-mono pt-1">
-                      ID: {String(idx + 1).padStart(3, '0')}
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-2 text-xs mb-4">
-                    <p className="text-zinc-500">
-                      <span className="text-zinc-600">TARGET AREA:</span> {res.targetArea}
-                    </p>
-                    <p className="text-zinc-400">
-                      <span className="text-zinc-600">METRIC:</span> {res.measuredMetric}
-                    </p>
-                  </div>
+            {analysis.recommendations.length === 0 ? (
+              <div className="border border-cyan-900/50 bg-cyan-950/20 p-6 rounded-sm text-center">
+                <p className="text-cyan-400 font-bold tracking-widest uppercase text-sm">
+                  ✓ IDEAL FACIAL GEOMETRY DETECTED
+                </p>
+                <p className="text-zinc-500 text-xs mt-1">
+                  All measured ratios fall within optimal proportions. No physical adjustments recommended.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {analysis.recommendations.map((res, idx) => (
+                  <div key={idx} className="border border-zinc-800 bg-zinc-950/50 p-5 rounded-sm hover:border-zinc-700 transition-colors">
+                    <div className="flex justify-between items-start mb-3 pb-3 border-b border-zinc-800">
+                      <h3 className="text-lg font-bold text-cyan-400 uppercase tracking-wide">
+                        {res.feature}
+                      </h3>
+                      <span className="text-xs text-zinc-600 font-mono pt-1">
+                        ID: {String(idx + 1).padStart(3, '0')}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-2 text-xs mb-4">
+                      <p className="text-zinc-500">
+                        <span className="text-zinc-600">TARGET AREA:</span> {res.targetArea}
+                      </p>
+                      <p className="text-zinc-400">
+                        <span className="text-zinc-600">METRIC:</span> {res.measuredMetric}
+                      </p>
+                    </div>
 
-                  <div className="mt-2">
-                    <p className="text-zinc-500 text-xs uppercase tracking-wider mb-2">Recommended Protocols:</p>
-                    <ul className="space-y-2 text-sm text-zinc-300">
-                      {res.recommendedRoutines.map((routine, rIdx) => (
-                        <li key={rIdx} className="flex items-start gap-2 bg-black/40 p-2 border-l-2 border-zinc-700">
-                          <span className="text-cyan-500 mt-0.5">›</span>
-                          <span>{routine}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-2">
+                      <p className="text-zinc-500 text-xs uppercase tracking-wider mb-2">Recommended Protocols:</p>
+                      <ul className="space-y-2 text-sm text-zinc-300">
+                        {res.recommendedRoutines.map((routine, rIdx) => (
+                          <li key={rIdx} className="flex items-start gap-2 bg-black/40 p-2 border-l-2 border-zinc-700">
+                            <span className="text-cyan-500 mt-0.5">›</span>
+                            <span>{routine}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
       </div>
