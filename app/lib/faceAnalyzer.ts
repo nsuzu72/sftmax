@@ -1,8 +1,6 @@
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-import { pipeline } from '@xenova/transformers';
 
 let faceLandmarker: FaceLandmarker | null = null;
-let classifierPipeline: any = null;
 
 export async function initModels() {
   if (!faceLandmarker) {
@@ -19,12 +17,27 @@ export async function initModels() {
     });
   }
 
-  if (!classifierPipeline) {
-    // Load lightweight ONNX demographic model directly in WebGL
-    classifierPipeline = await pipeline('image-classification', 'Xenova/fairface-ethnicity', {
-      device: 'webgl',
-    });
-  }
+  return { faceLandmarker };
+}
 
-  return { faceLandmarker, classifierPipeline };
+export function estimateDemographicFromCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  canvasWidth: number,
+  canvasHeight: number
+): string {
+  const leftCheek = landmarks[234];
+  const x = Math.floor(leftCheek.x * canvasWidth);
+  const y = Math.floor(leftCheek.y * canvasHeight);
+
+  try {
+    const pixel = ctx.getImageData(x, y, 1, 1).data;
+    const luminance = 0.299 * pixel[0] + 0.587 * pixel[1] + 0.114 * pixel[2];
+
+    if (luminance > 180) return 'Light Complexion / High Luminance';
+    if (luminance > 120) return 'Medium Complexion / Intermediate Luminance';
+    return 'Dark Complexion / Deep Luminance';
+  } catch (e) {
+    return 'Standard Profile';
+  }
 }
