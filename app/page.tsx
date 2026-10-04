@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { initModels } from '@/app/lib/faceAnalyzer.ts';
-import { evaluateFacialMetrics, SoftmaxRecommendation } from '@/app/lib/softmaxRules.ts';
+import { initModels, estimateDemographicFromCanvas } from '@/app/lib/faceAnalyzer';
+import { evaluateFacialMetrics, SoftmaxRecommendation } from '@/app/lib/softmaxRules';
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
@@ -21,26 +21,24 @@ export default function Home() {
     img.src = URL.createObjectURL(file);
     await img.decode();
 
-    // Prepare Canvas
     const canvas = canvasRef.current!;
     canvas.width = img.width;
     canvas.height = img.height;
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(img, 0, 0);
 
-    // Initialize local models
-    const { faceLandmarker, classifierPipeline } = await initModels();
+    // Initialize local MediaPipe vision model
+    const { faceLandmarker } = await initModels();
 
     // 1. Detect 3D Face Mesh
     const landmarkResult = faceLandmarker.detect(img);
-    
-    // 2. Classify Demographics/Ethnicity locally
-    const classification = await classifierPipeline(img.src);
-    const detectedEthnicity = classification[0]?.label || 'Unspecified';
-    setEthnicity(detectedEthnicity);
 
     if (landmarkResult.faceLandmarks.length > 0) {
       const landmarks = landmarkResult.faceLandmarks[0];
+
+      // 2. Estimate demographic/luminance profile from canvas directly
+      const detectedEthnicity = estimateDemographicFromCanvas(ctx, landmarks, canvas.width, canvas.height);
+      setEthnicity(detectedEthnicity);
 
       // Draw Landmark Overlay
       ctx.fillStyle = '#00FF00';
@@ -79,7 +77,7 @@ export default function Home() {
 
       {ethnicity && (
         <div className="bg-gray-100 p-4 rounded mb-6">
-          <h2 className="text-xl font-bold">Demographic Profile: <span className="text-indigo-600">{ethnicity}</span></h2>
+          <h2 className="text-xl font-bold">Complexion / Profile: <span className="text-indigo-600">{ethnicity}</span></h2>
         </div>
       )}
 
