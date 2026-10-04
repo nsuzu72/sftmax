@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { initModels } from '@/lib/faceAnalyzer';
-import { evaluateFacialMetrics, AnalysisResult } from '@/lib/softmaxRules';
+import { initModels } from '@/app/lib/faceAnalyzer';
+import { evaluateFacialMetrics, AnalysisResult } from '@/app/lib/softmaxRules';
 
 const ETHNICITIES = [
   'Northern European',
